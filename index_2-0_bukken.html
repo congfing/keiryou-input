@@ -824,8 +824,18 @@
       renderTable();
       return;
     }
-    headers = raw[0] ? [...raw[0]] : [];
-    originalData = raw.slice(1).map(r => {
+    // ヘッダー行自動検出：空セルが多い行をスキップして最初の充実した行をヘッダーに使う
+    let headerRowIdx = 0;
+    const nonEmpty = (row) => (row || []).filter(c => String(c).trim() !== '').length;
+    for (let i = 0; i < Math.min(5, raw.length - 1); i++) {
+      if (nonEmpty(raw[i]) < nonEmpty(raw[i + 1]) && nonEmpty(raw[i]) <= 1) {
+        headerRowIdx = i + 1;
+      } else {
+        break;
+      }
+    }
+    headers = raw[headerRowIdx] ? [...raw[headerRowIdx]] : [];
+    originalData = raw.slice(headerRowIdx + 1).map(r => {
       // Pad to headers length
       const row = [...r];
       while (row.length < headers.length) row.push('');
