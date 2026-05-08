@@ -1081,22 +1081,33 @@
   const popupSortDesc   = document.getElementById('popupSortDesc');
   const popupSortClear  = document.getElementById('popupSortClear');
 
-  popupSortAsc.addEventListener('click', () => {
-    const colIdx = parseInt(youbiApplyBtn.dataset.colIdx, 10);
-    sortState = { col: colIdx, dir: 1 };
+  function applySortDir(colIdx, dir) {
+    sortState = { col: colIdx, dir: dir };
+    if (dir === 0) {
+      sortState.col = -1;
+      dataArray = [...originalData];
+    } else {
+      dataArray.sort((a, b) => {
+        const va = String(a[colIdx] || '').trim();
+        const vb = String(b[colIdx] || '').trim();
+        if (va === '' && vb === '') return 0;
+        if (va === '') return 1;
+        if (vb === '') return -1;
+        return dir * naturalCompare(va, vb);
+      });
+    }
     youbiPopup.style.display = 'none';
     renderTable();
+  }
+
+  popupSortAsc.addEventListener('click', () => {
+    applySortDir(parseInt(youbiApplyBtn.dataset.colIdx, 10), 1);
   });
   popupSortDesc.addEventListener('click', () => {
-    const colIdx = parseInt(youbiApplyBtn.dataset.colIdx, 10);
-    sortState = { col: colIdx, dir: -1 };
-    youbiPopup.style.display = 'none';
-    renderTable();
+    applySortDir(parseInt(youbiApplyBtn.dataset.colIdx, 10), -1);
   });
   popupSortClear.addEventListener('click', () => {
-    sortState = { col: null, dir: 0 };
-    youbiPopup.style.display = 'none';
-    renderTable();
+    applySortDir(0, 0);
   });
 
   // フィルター状態: { colIdx, selectedValues: Set, filterType: 'exact'|'prefix' }
