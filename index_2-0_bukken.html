@@ -262,6 +262,21 @@
     white-space: nowrap;
   }
 
+  /* 計量リンクセル */
+  a.keiryou-link-cell {
+    display: inline-block;
+    padding: 2px 10px;
+    background: #1a6eb5;
+    color: #fff !important;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  a.keiryou-link-cell:hover { background: #1558a0; }
+  td.keiryou-td { text-align: center; }
+
   /* 整理番号セル選択 */
   td.seiri-cell {
     cursor: pointer;
@@ -960,19 +975,33 @@
 
       // Data cells
       const seiriBangoColIdx = getSeiriBangoColIdx();
+      const keiryouColIdx = headers.findIndex(h => h.trim() === '計量');
       row.forEach((cell, ci) => {
         const td = document.createElement('td');
-        td.contentEditable = 'true';
-        td.textContent = cell;
-        td.addEventListener('input', () => {
-          dataArray[idx][ci] = td.textContent;
-        });
-        td.addEventListener('keydown', e => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            td.blur();
-          }
-        });
+
+        // 計量列：リンクボタン表示
+        if (ci === keiryouColIdx && cell.trim() === '計量') {
+          td.contentEditable = 'false';
+          td.className = 'keiryou-td';
+          const a = document.createElement('a');
+          a.className = 'keiryou-link-cell';
+          a.href = 'index_3-15.html';
+          a.textContent = '計量';
+          td.appendChild(a);
+        } else {
+          td.contentEditable = 'true';
+          td.textContent = cell;
+          td.addEventListener('input', () => {
+            dataArray[idx][ci] = td.textContent;
+          });
+          td.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              td.blur();
+            }
+          });
+        }
+
         // 整理番号列：クリックで選択
         if (ci === seiriBangoColIdx) {
           td.classList.add('seiri-cell');
