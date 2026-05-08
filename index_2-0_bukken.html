@@ -530,11 +530,16 @@
 <div id="warnToast"></div>
 <div id="successToast"></div>
 
-<!-- 曜日フィルターポップアップ -->
+<!-- フィルターポップアップ -->
 <div id="youbiPopup" style="display:none; position:fixed; z-index:250; background:#fff; border:1px solid #b5cef5; border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,0.22); padding:12px 14px; min-width:210px; max-width:260px;">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
     <strong id="youbiPopupTitle" style="font-size:14px; color:#1a6eb5;"></strong>
     <button id="youbiPopupClose" style="background:none;border:none;font-size:16px;cursor:pointer;color:#888;padding:0 2px;">✕</button>
+  </div>
+  <div style="display:flex; gap:5px; margin-bottom:8px;">
+    <button id="popupSortAsc"  style="flex:1; padding:4px 0; font-size:11px; border:1px solid #a0b8d8; border-radius:3px; background:#fff; cursor:pointer; font-family:inherit;">↑ 昇順</button>
+    <button id="popupSortDesc" style="flex:1; padding:4px 0; font-size:11px; border:1px solid #a0b8d8; border-radius:3px; background:#fff; cursor:pointer; font-family:inherit;">↓ 降順</button>
+    <button id="popupSortClear" style="flex:1; padding:4px 0; font-size:11px; border:1px solid #a0b8d8; border-radius:3px; background:#fff; cursor:pointer; font-family:inherit;">解除</button>
   </div>
   <div style="display:flex; gap:6px; margin-bottom:8px;">
     <button id="youbiSelectAll" style="flex:1; padding:4px 0; font-size:11px; border:1px solid #a0b8d8; border-radius:3px; background:#fff; cursor:pointer; font-family:inherit;">全選択</button>
@@ -856,45 +861,38 @@
       const th = document.createElement('th');
       th.dataset.col = i;
 
-      const isYoubi = h && h.includes('曜日');
-
-      if (isYoubi) {
-        // 曜日列：件数バッジ付き表示
-        const isFiltered = youbiFilterState.colIdx === i && youbiFilterState.selectedValues.size > 0;
-        const count = isFiltered
-          ? dataArray.filter(row => {
-              const v = String(row[i] || '').trim();
-              if (youbiFilterState.filterType === 'prefix') {
-                for (const sel of youbiFilterState.selectedValues) {
-                  if (sel.startsWith('\x00exact:')) { if (v === sel.slice(7)) return true; }
-                  else { if (v.startsWith(sel)) return true; }
-                }
-                return false;
+      // 全列：フィルターポップアップ対応
+      const isFiltered = youbiFilterState.colIdx === i && youbiFilterState.selectedValues.size > 0;
+      const count = isFiltered
+        ? dataArray.filter(row => {
+            const v = String(row[i] || '').trim();
+            if (youbiFilterState.filterType === 'prefix') {
+              for (const sel of youbiFilterState.selectedValues) {
+                if (sel.startsWith('\x00exact:')) { if (v === sel.slice(7)) return true; }
+                else { if (v.startsWith(sel)) return true; }
               }
-              return youbiFilterState.selectedValues.has(v);
-            }).length
-          : dataArray.filter(row => String(row[i] || '').trim() !== '').length;
-        th.innerHTML = '';
-        const label = document.createElement('span');
-        label.textContent = h;
-        th.appendChild(label);
-        const badge = document.createElement('span');
-        badge.className = 'youbi-count-badge';
-        badge.textContent = count;
-        if (isFiltered) {
-          th.classList.add('youbi-active');
-          badge.classList.add('youbi-badge-active');
-        }
-        th.appendChild(badge);
-        th.title = `${h}：クリックでフィルター`;
-        th.addEventListener('click', (e) => showYoubiFilterPopup(i, th));
-      } else {
-        th.textContent = h || ('列' + (i + 1));
-        if (sortState.col === i && sortState.dir !== 0) {
-          th.classList.add(sortState.dir === 1 ? 'sorted-asc' : 'sorted-desc');
-        }
-        th.addEventListener('click', () => handleSort(i));
+              return false;
+            }
+            return youbiFilterState.selectedValues.has(v);
+          }).length
+        : dataArray.filter(row => String(row[i] || '').trim() !== '').length;
+      th.innerHTML = '';
+      const label = document.createElement('span');
+      label.textContent = h || ('列' + (i + 1));
+      th.appendChild(label);
+      const badge = document.createElement('span');
+      badge.className = 'youbi-count-badge';
+      badge.textContent = count;
+      if (isFiltered) {
+        th.classList.add('youbi-active');
+        badge.classList.add('youbi-badge-active');
       }
+      if (sortState.col === i && sortState.dir !== 0) {
+        th.classList.add(sortState.dir === 1 ? 'sorted-asc' : 'sorted-desc');
+      }
+      th.appendChild(badge);
+      th.title = `${h}：クリックでフィルター・ソート`;
+      th.addEventListener('click', (e) => showYoubiFilterPopup(i, th));
       tr.appendChild(th);
     });
     tableHead.appendChild(tr);
@@ -1069,6 +1067,27 @@
   const youbiSelectAll  = document.getElementById('youbiSelectAll');
   const youbiSelectNone = document.getElementById('youbiSelectNone');
   const youbiPopupClose = document.getElementById('youbiPopupClose');
+  const popupSortAsc    = document.getElementById('popupSortAsc');
+  const popupSortDesc   = document.getElementById('popupSortDesc');
+  const popupSortClear  = document.getElementById('popupSortClear');
+
+  popupSortAsc.addEventListener('click', () => {
+    const colIdx = parseInt(youbiApplyBtn.dataset.colIdx, 10);
+    sortState = { col: colIdx, dir: 1 };
+    youbiPopup.style.display = 'none';
+    renderTable();
+  });
+  popupSortDesc.addEventListener('click', () => {
+    const colIdx = parseInt(youbiApplyBtn.dataset.colIdx, 10);
+    sortState = { col: colIdx, dir: -1 };
+    youbiPopup.style.display = 'none';
+    renderTable();
+  });
+  popupSortClear.addEventListener('click', () => {
+    sortState = { col: null, dir: 0 };
+    youbiPopup.style.display = 'none';
+    renderTable();
+  });
 
   // フィルター状態: { colIdx, selectedValues: Set, filterType: 'exact'|'prefix' }
   // filterType='prefix': selectedValues はプレフィックス ("N-" など)、前方一致で絞り込む
