@@ -488,10 +488,15 @@
   <label class="file-label" for="fileInput">📂 ファイルを開く</label>
   <input type="file" id="fileInput" accept=".xlsx,.xls">
 
+  <select id="gitFileSelector" title="GitHubのExcelファイルを選択">
+    <option value="">⏳ ファイル一覧取得中…</option>
+  </select>
+
   <select id="sheetSelector" title="シートを選択"></select>
 
   <input type="text" id="searchInput" placeholder="🔍 検索（全列）" title="テキストを入力してフィルタ">
 
+  <button class="toolbar-btn" id="btnReload">🔄 最新を取得</button>
   <button class="toolbar-btn" id="btnAddRow">➕ 行追加</button>
   <button class="toolbar-btn" id="btnCheckBango">🔢 番号チェック</button>
   <button class="toolbar-btn" id="btnSave">💾 Excel保存</button>
@@ -653,40 +658,119 @@
     successTimer = setTimeout(() => { successToast.style.display = 'none'; }, 4000);
   }
 
-  // ===== File load =====
+
+
+  // ===== Excelデータをパースして表示する共通処理 =====
+  function loadWorkbookData(arrayBuffer, filename) {
+    try {
+      const data = new Uint8Array(arrayBuffer);
+      workbook = XLSX.read(data, { type: 'array', cellStyles: true, cellFormula: true });
+      allSheetsData = {};
+      sheetSelector.innerHTML = '';
+      workbook.SheetNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sheetSelector.appendChild(opt);
+        const ws = workbook.Sheets[name];
+        const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        allSheetsData[name] = json.map(r => r.map(c => (c === null || c === undefined) ? '' : String(c)));
+      });
+      currentSheetName = workbook.SheetNames[0];
+      sheetSelector.value = currentSheetName;
+      fileNameDisplay.textContent = filename;
+      loadSheet(currentSheetName);
+    } catch(err) {
+      alert('ファイル読み込みエラー: ' + err.message);
+    }
+  }
+
+  // ===== GitHub ファイル一覧取得 =====
+  const GITHUB_API_URL = 'https://api.github.com/repos/congfing/keiryou-input/contents/';
+  const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/congfing/keiryou-input/main/';
+  const gitFileSelector = document.getElementById('gitFileSelector');
+
+  function fetchGitHubFileList() {
+    fetch(GITHUB_API_URL + '?t=' + Date.now())
+      .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(files => {
+        const xlsxFiles = files.filter(f => f.type === 'file' && /\.xlsx$/i.test(f.name));
+        gitFileSelector.innerHTML = '';
+        if (xlsxFiles.length === 0) {
+          gitFileSelector.innerHTML = '<option value="">Excelファイルなし</option>';
+          return;
+        }
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '📂 GitHubファイル選択…';
+        gitFileSelector.appendChild(placeholder);
+        xlsxFiles.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = encodeURIComponent(f.name);
+          opt.textContent = f.name;
+          gitFileSelector.appendChild(opt);
+        });
+        // 最初のファイルを自動ロード
+        if (xlsxFiles.length > 0) {
+          gitFileSelector.value = encodeURIComponent(xlsxFiles[0].name);
+          loadFromGitHub(xlsxFiles[0].name);
+        }
+      })
+      .catch(err => {
+        gitFileSelector.innerHTML = '<option value="">⚠️ 取得失敗</option>';
+        updateStatus('⚠️ GitHubファイル一覧取得失敗 — 手動でファイルを開いてください');
+        console.warn('GitHub一覧取得エラー:', err);
+      });
+  }
+
+  // ===== GitHubからExcelを取得 =====
+  function loadFromGitHub(filename) {
+    if (!filename) {
+      const sel = gitFileSelector.value;
+      if (!sel) return;
+      filename = decodeURIComponent(sel);
+    }
+    const btn = document.getElementById('btnReload');
+    if (btn) { btn.textContent = '⏳ 読込中…'; btn.disabled = true; }
+    updateStatus('GitHubから物件表を読み込み中…');
+    const url = GITHUB_RAW_BASE + encodeURIComponent(filename) + '?t=' + Date.now();
+    fetch(url)
+      .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); })
+      .then(buf => {
+        loadWorkbookData(buf, filename);
+        showToast('✅ GitHubから「' + filename + '」を読み込みました');
+      })
+      .catch(err => {
+        updateStatus('⚠️ 読み込み失敗 — 手動でファイルを開いてください');
+        console.warn('GitHub読み込みエラー:', err);
+      })
+      .finally(() => {
+        if (btn) { btn.textContent = '🔄 最新を取得'; btn.disabled = false; }
+      });
+  }
+
+  // GitHubファイル選択時
+  gitFileSelector.addEventListener('change', function() {
+    if (this.value) loadFromGitHub(decodeURIComponent(this.value));
+  });
+
+  // 🔄ボタン：現在選択中ファイルを再取得
+  document.getElementById('btnReload').addEventListener('click', function() {
+    loadFromGitHub();
+  });
+
+  // ===== File load（手動）=====
   fileInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
-    fileNameDisplay.textContent = file.name;
     const reader = new FileReader();
-    reader.onload = function(ev) {
-      try {
-        const data = new Uint8Array(ev.target.result);
-        workbook = XLSX.read(data, { type: 'array', cellStyles: true, cellFormula: true });
-        allSheetsData = {};
-        // Populate sheet selector
-        sheetSelector.innerHTML = '';
-        workbook.SheetNames.forEach(name => {
-          const opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = name;
-          sheetSelector.appendChild(opt);
-          // Pre-parse all sheets
-          const ws = workbook.Sheets[name];
-          const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          allSheetsData[name] = json.map(r => r.map(c => (c === null || c === undefined) ? '' : String(c)));
-        });
-        currentSheetName = workbook.SheetNames[0];
-        sheetSelector.value = currentSheetName;
-        loadSheet(currentSheetName);
-      } catch(err) {
-        alert('ファイル読み込みエラー: ' + err.message);
-      }
-    };
+    reader.onload = function(ev) { loadWorkbookData(ev.target.result, file.name); };
     reader.readAsArrayBuffer(file);
-    // reset so same file can be re-opened
     this.value = '';
   });
+
+  // ページ読み込み時にGitHubファイル一覧を取得して最初のファイルを自動ロード
+  fetchGitHubFileList();
 
   sheetSelector.addEventListener('change', function() {
     if (!workbook) return;
